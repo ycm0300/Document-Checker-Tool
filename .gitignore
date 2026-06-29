@@ -1,0 +1,13 @@
+# 输入文档
+input/
+
+# 输出目录（如果以后会建）
+output/
+
+# Python缓存
+__pycache__/
+*.pyc
+
+# IDE配置
+.vscode/
+.idea/
