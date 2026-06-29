@@ -1,19 +1,15 @@
 # 输入文档：保留文件夹，不上传里面的文件
-
-input/*
-!input/.gitkeep
+Input/*
+!Input/.gitkeep
 
 # 输出目录：保留文件夹，不上传里面的文件
-
-output/*
-!output/.gitkeep
+Output/*
+!Output/.gitkeep
 
 # Python缓存
-
-**pycache**/
+__pycache__/
 *.pyc
 
 # IDE配置
-
 .vscode/
 .idea/
