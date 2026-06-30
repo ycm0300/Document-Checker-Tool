@@ -29,6 +29,37 @@ def parse_num(text):
     return tuple(map(int, m.group(1).split(".")))
 
 
+def parse_heading_level(text):
+    """
+    提取 Heading 级别：Heading 4 -> 4
+    """
+    text = clean(text)
+    m = re.match(r"^Heading\s+(\d+)$", text, re.IGNORECASE)
+    if not m:
+        return None
+    return int(m.group(1))
+
+
+def is_relative_heading4_num(raw, num, heading_level):
+    """
+    Heading 4 中形如 1. / 2. / 3. 的相对编号。
+    这类编号只在当前父级标题下检查连续性，不做全文重复检查。
+    """
+    text = clean(raw)
+    return heading_level == 4 and len(num) == 1 and re.match(r"^\d+\.?$", text) is not None
+
+
+def find_nearest_parent(ancestors, heading_level):
+    """
+    查找当前标题最近的上级标题。
+    Heading 4 的相对编号可能直接挂在 Heading 2 下，不一定有 Heading 3。
+    """
+    for level in range(heading_level - 1, 0, -1):
+        if level in ancestors:
+            return ancestors[level]
+    return ("未知父级",)
+
+
 def find_latest():
     files = list(OUTPUT_DIR.glob(f"{CATALOG_PREFIX}*.xlsx"))
     if not files:
@@ -44,11 +75,15 @@ def check_sheet(ws):
         raise ValueError(f"{ws.title} 缺少：标题编号")
 
     col_num = idx["标题编号"]
+    col_level = idx.get("Heading级别")
+    col_full_heading = idx.get("完整标题")
 
     seen = set()
     issues = []
 
     last_level = {}
+    relative_heading4_last = {}
+    ancestors = {}
 
     rows = []
 
@@ -59,12 +94,52 @@ def check_sheet(ws):
         if not num:
             continue
 
-        rows.append((r, num, val))
+        heading_level = None
+        if col_level:
+            heading_level = parse_heading_level(ws.cell(r, col_level).value)
+
+        full_heading = clean(ws.cell(r, col_full_heading).value) if col_full_heading else clean(val)
+
+        rows.append((r, num, val, heading_level, full_heading))
 
     # =========================
     # 纯编号分析
     # =========================
-    for i, (r, num, raw) in enumerate(rows):
+    for i, (r, num, raw, heading_level, full_heading) in enumerate(rows):
+        is_relative_heading4 = is_relative_heading4_num(raw, num, heading_level)
+
+        if heading_level and not is_relative_heading4:
+            ancestors[heading_level] = num
+            for level in list(ancestors):
+                if level > heading_level:
+                    ancestors.pop(level, None)
+
+        if is_relative_heading4:
+            parent_key = find_nearest_parent(ancestors, heading_level)
+            parent_text = ".".join(map(str, parent_key))
+            cur = num[-1]
+
+            if parent_key in relative_heading4_last:
+                expect = relative_heading4_last[parent_key] + 1
+                if cur != expect:
+                    issues.append([
+                        "不连续",
+                        ".".join(map(str, num)),
+                        raw,
+                        full_heading,
+                        f"第{r}行，父级 {parent_text} 下应为 {expect}."
+                    ])
+            elif cur != 1:
+                issues.append([
+                    "不连续",
+                    ".".join(map(str, num)),
+                    raw,
+                    full_heading,
+                    f"第{r}行，父级 {parent_text} 下应为 1."
+                ])
+
+            relative_heading4_last[parent_key] = cur
+            continue
 
         # -------- 重复检查 --------
         if num in seen:
@@ -72,6 +147,7 @@ def check_sheet(ws):
                 "重复",
                 ".".join(map(str, num)),
                 raw,
+                full_heading,
                 f"第{r}行重复出现"
             ])
             continue
@@ -89,6 +165,7 @@ def check_sheet(ws):
                     "不连续",
                     ".".join(map(str, num)),
                     raw,
+                    full_heading,
                     f"应为 {'.'.join(map(str, parent + (expect,)))}"
                 ])
 
@@ -109,10 +186,10 @@ def write_report(all_results):
 
     for sheet, issues in all_results.items():
         ws = wb.create_sheet(sheet[:31])
-        ws.append(["类型", "编号", "原始内容", "说明"])
+        ws.append(["类型", "编号", "原始内容", "完整标题", "说明"])
 
         if not issues:
-            ws.append(["通过", "", "", "无问题"])
+            ws.append(["通过", "", "", "", "无问题"])
         else:
             for i in issues:
                 ws.append(i)
