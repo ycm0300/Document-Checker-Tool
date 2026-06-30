@@ -1,8 +1,9 @@
-# 英语文档专用
-print("我正在运行 read_word.py")
+﻿# 英语文档专用
+print("我正在运行 read_word_heading_catalog_only_fixed.py")
 
 from pathlib import Path
 import re
+from datetime import datetime
 from collections import defaultdict
 
 from docx import Document
@@ -21,7 +22,8 @@ INPUT_DIR = BASE_DIR / "input"
 OUTPUT_DIR = BASE_DIR / "output"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
-SUMMARY_EXCEL_NAME = "总检查结果.xlsx"
+SUMMARY_EXCEL_PREFIX = "总检查结果"
+HEADING_CATALOG_EXCEL_PREFIX = "标题目录"
 
 
 # ========== 通用工具 ==========
@@ -33,6 +35,18 @@ def clean_text(text):
     text = text.replace("\u3000", " ")
     text = " ".join(text.split())
     return text.strip()
+
+
+def get_summary_excel_name():
+    """生成带时间戳的汇总 Excel 文件名，避免覆盖历史结果。"""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return f"{SUMMARY_EXCEL_PREFIX}_{timestamp}.xlsx"
+
+
+def get_heading_catalog_excel_name():
+    """生成带时间戳的标题目录 Excel 文件名，避免覆盖历史结果。"""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return f"{HEADING_CATALOG_EXCEL_PREFIX}_{timestamp}.xlsx"
 
 
 def safe_sheet_name(name):
@@ -62,6 +76,36 @@ def is_heading(paragraph):
 
     return False
 
+
+def get_heading_level(paragraph):
+    """返回 Word 标题样式层级：Heading 1 -> 1。"""
+    style_name = paragraph.style.name if paragraph.style else ""
+    match = re.match(r"^(?:Heading|标题)\s*(\d+)$", style_name, re.IGNORECASE)
+    if not match:
+        return None
+    return int(match.group(1))
+
+def is_toc_paragraph(paragraph):
+    """识别目录段落；目录不参与正文标题层级检查。"""
+    raw_text = paragraph.text or ""
+    text = clean_text(raw_text)
+    if not text:
+        return False
+
+    style_name = paragraph.style.name if paragraph.style else ""
+    style_name_lower = style_name.lower()
+    if style_name_lower.startswith("toc") or style_name.startswith("目录"):
+        return True
+
+    # Word 目录通常用制表符或点引导符连接页码。
+    if re.match(r"^\d+(?:\.\d+)*\s+.+\t\d+$", raw_text):
+        return True
+    if re.match(r"^\d+(?:\.\d+)*\s+.+\.{2,}\s*\d+$", text):
+        return True
+    if re.match(r"^\d+(?:\.\d+)*\s+.+\s+\d+$", text):
+        return True
+
+    return False
 
 # ========== Word 自动编号读取工具 ==========
 
@@ -341,6 +385,8 @@ def read_word_file(file_path):
 
             paragraph_index += 1
 
+            is_toc = is_toc_paragraph(block)
+            heading_level = get_heading_level(block)
             if is_heading(block):
                 current_heading = get_heading_text(block, numbering_state)
                 results.append({
@@ -349,6 +395,9 @@ def read_word_file(file_path):
                     "location": f"正文-段落{paragraph_index}",
                     "source_type": "正文",
                     "text": text,
+                    "is_heading": not is_toc,
+                    "is_toc": is_toc,
+                    "heading_level": heading_level,
                 })
             else:
                 results.append({
@@ -357,6 +406,9 @@ def read_word_file(file_path):
                     "location": f"正文-段落{paragraph_index}",
                     "source_type": "正文",
                     "text": text,
+                    "is_heading": False,
+                    "is_toc": False,
+                    "heading_level": None,
                 })
 
         elif isinstance(block, Table):
@@ -511,8 +563,165 @@ def check_english_format(text):
     return issues
 
 
+HEADING_NUMBER_PATTERN = re.compile(r"^(\d+(?:\.\d+)*)\b")
+RELATIVE_LEVEL4_PATTERN = re.compile(r"^(\d+)\.?\s+.+")
+MAX_HEADING_DEPTH = 4
+
+
+def parse_heading_number(text):
+    """提取标题开头的数字编号，例如 2.3.1。"""
+    match = HEADING_NUMBER_PATTERN.match(clean_text(text))
+    if not match:
+        return None
+    try:
+        return tuple(int(part) for part in match.group(1).split("."))
+    except ValueError:
+        return None
+
+
+def parse_relative_level4_number(text):
+    """识别三级标题下形如“1. 标题”的相对四级编号。"""
+    match = RELATIVE_LEVEL4_PATTERN.match(clean_text(text))
+    if not match:
+        return None
+    return int(match.group(1))
+
+def is_toc_like_heading(text):
+    """跳过目录中常见的“编号 标题 页码”行，避免和正文标题混淆。"""
+    text = clean_text(text)
+    return re.match(r"^\d+(?:\.\d+)*\s+.+\s+\d+$", text) is not None
+
+
+def make_heading_issue(item, issue):
+    return {
+        "file_name": item["file_name"],
+        "issue_type": "标题层级",
+        "heading": item["heading"],
+        "location": item["location"],
+        "content": item["heading"],
+        "issue": issue,
+    }
+
+
+def format_heading_number(number):
+    return ".".join(str(part) for part in number)
+
+
+def number_from_style_level(level, style_counters):
+    """按 Word Heading 样式层级重新生成标题编号。"""
+    if level is None or level < 1 or level > MAX_HEADING_DEPTH:
+        return None
+
+    for upper_level in range(1, level):
+        if style_counters[upper_level] == 0:
+            style_counters[upper_level] = 1
+
+    style_counters[level] += 1
+    for lower_level in range(level + 1, MAX_HEADING_DEPTH + 1):
+        style_counters[lower_level] = 0
+
+    return tuple(style_counters[1:level + 1])
+
+
+def check_heading_structure(items):
+    """检查标题连续性、层级深度、重复编号和编号倒退。"""
+    issues = []
+    seen_numbers = {}
+    max_number_by_parent = {}
+    style_counters = [0] * (MAX_HEADING_DEPTH + 1)
+    current_level3_number = None
+
+    for item in items:
+        if item.get("is_toc") or not item.get("is_heading"):
+            continue
+
+        heading_text = item["heading"]
+        source_text = item.get("text", heading_text)
+        if is_toc_like_heading(heading_text):
+            continue
+
+        heading_level = item.get("heading_level")
+        heading_number = parse_heading_number(heading_text)
+        explicit_number = parse_heading_number(source_text)
+        relative_level4 = parse_relative_level4_number(heading_text)
+
+        if heading_level is not None and heading_number is None:
+            continue
+
+        is_relative_level4 = False
+        if heading_level == 4 and relative_level4 is not None and current_level3_number is not None:
+            number = current_level3_number + (relative_level4,)
+            is_relative_level4 = True
+        elif heading_level is not None:
+            number = number_from_style_level(heading_level, style_counters)
+        elif relative_level4 is not None and current_level3_number is not None:
+            number = current_level3_number + (relative_level4,)
+        else:
+            number = explicit_number
+
+        if number is None:
+            continue
+
+        if len(number) == 3:
+            current_level3_number = number
+        elif len(number) < 3:
+            current_level3_number = None
+
+        number_text = format_heading_number(number)
+        parent = number[:-1]
+        current = number[-1]
+
+        if len(number) > MAX_HEADING_DEPTH:
+            issues.append(make_heading_issue(
+                item,
+                f"标题层级过深：{number_text}，当前最多建议 {MAX_HEADING_DEPTH} 级标题",
+            ))
+
+        if len(number) > 1 and parent not in seen_numbers and not is_relative_level4 and heading_level is None:
+            parent_text = format_heading_number(parent)
+            issues.append(make_heading_issue(
+                item,
+                f"标题层级跳跃：{number_text} 缺少上级标题 {parent_text}",
+            ))
+
+        if number in seen_numbers:
+            issues.append(make_heading_issue(
+                item,
+                f"标题重复：{number_text} 已在 {seen_numbers[number]} 出现过",
+            ))
+            continue
+
+        previous_max = max_number_by_parent.get(parent)
+        if previous_max is None:
+            if current != 1:
+                expected = format_heading_number(parent + (1,))
+                issues.append(make_heading_issue(
+                    item,
+                    f"标题连续性异常：当前为 {number_text}，该层级应从 {expected} 开始",
+                ))
+        elif current < previous_max:
+            issues.append(make_heading_issue(
+                item,
+                f"标题倒退：同级标题已出现到 {format_heading_number(parent + (previous_max,))}，当前又出现 {number_text}",
+            ))
+        elif current > previous_max + 1:
+            expected = format_heading_number(parent + (previous_max + 1,))
+            issues.append(make_heading_issue(
+                item,
+                f"标题连续性异常：{format_heading_number(parent + (previous_max,))} 后出现 {number_text}，疑似缺少 {expected}",
+            ))
+
+        seen_numbers[number] = item["location"]
+        max_number_by_parent[parent] = max(previous_max or 0, current)
+
+    return issues
+
 def check_items(items):
-    """对一个文档读取结果进行检查。"""
+    """对一个文档读取结果进行检查。
+
+    注意：这里不再执行标题连续性/标题层级判断，避免误报。
+    标题只在“标题目录”中单独提取展示。
+    """
     issues = []
 
     for item in items:
@@ -611,6 +820,115 @@ def write_issue_sheet(sheet, issues):
     sheet.auto_filter.ref = sheet.dimensions
 
 
+
+
+def split_heading_number_and_title(heading_text):
+    """把“1.2 Dashboard”拆成编号和标题名称；如果没有编号，则编号为空。"""
+    text = clean_text(heading_text)
+    match = re.match(r"^(\d+(?:\.\d+)*)\s+(.+)$", text)
+    if match:
+        return match.group(1), match.group(2)
+    return "", text
+
+
+def apply_heading_catalog_style(sheet, headers, widths):
+    """统一设置标题目录 Sheet 的表头、列宽和筛选。"""
+    for col in range(1, len(headers) + 1):
+        cell = sheet.cell(row=1, column=col)
+        cell.font = Font(bold=True)
+        cell.fill = PatternFill("solid", fgColor="D9EAF7")
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    for i, width in enumerate(widths, start=1):
+        sheet.column_dimensions[get_column_letter(i)].width = width
+
+    for row in sheet.iter_rows(min_row=2):
+        for cell in row:
+            cell.alignment = Alignment(vertical="top", wrap_text=True)
+
+    sheet.freeze_panes = "A2"
+    sheet.auto_filter.ref = sheet.dimensions
+
+
+def get_heading_rows(items):
+    """从某个文档的读取结果中提取标题行。"""
+    rows = []
+    for item in items:
+        if item.get("is_toc") or not item.get("is_heading"):
+            continue
+
+        heading_text = item.get("heading", "")
+        heading_number, heading_title = split_heading_number_and_title(heading_text)
+        heading_level = item.get("heading_level")
+        heading_level_text = f"Heading {heading_level}" if heading_level else "未识别"
+
+        rows.append({
+            "heading_number": heading_number,
+            "heading_title": heading_title,
+            "heading_level": heading_level_text,
+            "location": item.get("location", ""),
+            "full_heading": heading_text,
+        })
+
+    return rows
+
+
+def export_heading_catalog_excel(all_file_items, output_file):
+    """
+    导出标题目录.xlsx。
+    Sheet1：汇总
+    后续 Sheet：每个文档一个标题目录 Sheet。
+    只提取标题清单，不判断标题是否连续，避免误报。
+    """
+    workbook = Workbook()
+    summary_sheet = workbook.active
+    summary_sheet.title = "汇总"
+
+    summary_headers = ["序号", "文档名称", "标题数量"]
+    summary_sheet.append(summary_headers)
+
+    for col in range(1, len(summary_headers) + 1):
+        cell = summary_sheet.cell(row=1, column=col)
+        cell.font = Font(bold=True)
+        cell.fill = PatternFill("solid", fgColor="D9EAF7")
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    detail_headers = ["序号", "标题编号", "标题名称", "Heading级别", "位置", "完整标题"]
+    detail_widths = [8, 16, 50, 16, 24, 70]
+
+    for file_index, (file_name, items) in enumerate(all_file_items.items(), start=1):
+        heading_rows = get_heading_rows(items)
+        summary_sheet.append([file_index, file_name, len(heading_rows)])
+
+        sheet_name = safe_sheet_name(Path(file_name).stem)
+        sheet = workbook.create_sheet(title=sheet_name)
+        sheet.append(detail_headers)
+
+        if heading_rows:
+            for row_index, row in enumerate(heading_rows, start=1):
+                sheet.append([
+                    row_index,
+                    row["heading_number"],
+                    row["heading_title"],
+                    row["heading_level"],
+                    row["location"],
+                    row["full_heading"],
+                ])
+        else:
+            sheet.append([1, "", "未提取到标题", "", "", ""])
+
+        apply_heading_catalog_style(sheet, detail_headers, detail_widths)
+
+    summary_widths = [8, 50, 12]
+    for i, width in enumerate(summary_widths, start=1):
+        summary_sheet.column_dimensions[get_column_letter(i)].width = width
+
+    summary_sheet.freeze_panes = "A2"
+    summary_sheet.auto_filter.ref = summary_sheet.dimensions
+
+    workbook.save(output_file)
+
+
 def export_summary_excel(all_file_issues, output_file):
     """
     导出总检查结果.xlsx：
@@ -684,10 +1002,14 @@ def main():
     # 保存每个文档的问题；即使0个问题，也保留这个文档
     all_file_issues = {}
 
+    # 保存每个文档的标题目录；只提取，不自动判断连续性
+    all_file_items = {}
+
     for word_file in word_files:
         print(f"正在读取：{word_file.name}")
 
         items = read_word_file(word_file)
+        all_file_items[word_file.name] = items
 
         read_txt_file = OUTPUT_DIR / f"{word_file.stem}_读取结果.txt"
         export_read_result_to_txt(items, read_txt_file)
@@ -698,9 +1020,37 @@ def main():
 
         print(f"检查完成：{word_file.name}，发现 {len(issues)} 个问题")
 
-    summary_excel_file = OUTPUT_DIR / SUMMARY_EXCEL_NAME
+    summary_excel_file = OUTPUT_DIR / get_summary_excel_name()
     export_summary_excel(all_file_issues, summary_excel_file)
     print(f"总检查结果已输出：{summary_excel_file}")
 
+    heading_catalog_file = OUTPUT_DIR / get_heading_catalog_excel_name()
+    export_heading_catalog_excel(all_file_items, heading_catalog_file)
+    print(f"标题目录已输出：{heading_catalog_file}")
+
 if __name__ == "__main__":
     main()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
