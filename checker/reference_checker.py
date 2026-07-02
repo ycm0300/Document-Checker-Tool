@@ -36,6 +36,7 @@ def check_figure_references(items):
             "file_name": item["file_name"],
             "issue_type": "引用问题",
             "heading": item["heading"],
+            "section_key": item.get("section_key", item["heading"]),
             "location": item["location"],
             "content": item["text"],
             "issue": f"Figure {figure_number} 仅出现一次，可能未被正文引用",

@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 from openpyxl import Workbook
@@ -10,6 +11,22 @@ from config.common_rules import (
     safe_sheet_name,
 )
 from parser.heading_catalog import get_heading_rows
+
+
+RELATIVE_HEADING_PATTERN = re.compile(r"^\d+\.?\s+.+")
+
+
+def format_issue_heading(issue):
+    heading = issue["heading"]
+    section_key = issue.get("section_key")
+    if not section_key or not RELATIVE_HEADING_PATTERN.match(str(heading)):
+        return heading
+
+    parts = [part.strip() for part in str(section_key).split(">") if part.strip()]
+    if len(parts) < 2:
+        return heading
+
+    return " > ".join(parts[-2:])
 
 
 def write_issue_sheet(sheet, issues):
@@ -30,6 +47,7 @@ def write_issue_sheet(sheet, issues):
         "英文格式": 4,
         "版式问题": 5,
         "引用问题": 6,
+        "内容质量": 7,
     }
 
     sorted_issues = sorted(
@@ -41,7 +59,7 @@ def write_issue_sheet(sheet, issues):
         sheet.append([
             index,
             issue["issue_type"],
-            issue["heading"],
+            format_issue_heading(issue),
             issue["location"],
             issue["content"],
             issue["issue"],
@@ -143,7 +161,7 @@ def export_summary_excel(all_file_issues, output_file):
     summary_sheet = workbook.active
     summary_sheet.title = "汇总"
 
-    summary_headers = ["序号", "文档名称", "问题总数", "中文残留", "厂商残留", "英文格式", "版式问题", "引用问题"]
+    summary_headers = ["序号", "文档名称", "问题总数", "中文残留", "厂商残留", "英文格式", "版式问题", "引用问题", "内容质量"]
     summary_sheet.append(summary_headers)
 
     for col in range(1, len(summary_headers) + 1):
@@ -158,6 +176,7 @@ def export_summary_excel(all_file_issues, output_file):
         format_count = sum(1 for i in issues if i["issue_type"] == "英文格式")
         layout_count = sum(1 for i in issues if i["issue_type"] == "版式问题")
         reference_count = sum(1 for i in issues if i["issue_type"] == "引用问题")
+        content_quality_count = sum(1 for i in issues if i["issue_type"] == "内容质量")
         summary_sheet.append([
             index,
             file_name,
@@ -167,9 +186,10 @@ def export_summary_excel(all_file_issues, output_file):
             format_count,
             layout_count,
             reference_count,
+            content_quality_count,
         ])
 
-    summary_widths = [8, 50, 12, 12, 12, 12, 12, 12]
+    summary_widths = [8, 50, 12, 12, 12, 12, 12, 12, 12]
     for i, width in enumerate(summary_widths, start=1):
         summary_sheet.column_dimensions[get_column_letter(i)].width = width
 

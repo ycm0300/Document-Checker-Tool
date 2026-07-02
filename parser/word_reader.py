@@ -269,6 +269,15 @@ def get_heading_text(paragraph, numbering_state=None):
     return text if text else "未识别到章节"
 
 
+def make_section_key(heading_stack):
+    headings = [
+        heading_stack[level]
+        for level in sorted(heading_stack)
+        if heading_stack.get(level)
+    ]
+    return " > ".join(headings) if headings else "未识别到章节"
+
+
 def iter_block_items(parent):
     """按 Word 原始顺序遍历正文中的段落和表格。"""
     if isinstance(parent, DocxDocument):
@@ -292,6 +301,8 @@ def read_word_file(file_path):
     file_name = file_path.name
     results = []
     current_heading = "未识别到章节"
+    heading_stack = {}
+    current_section_key = current_heading
     paragraph_index = 0
     table_index = 0
 
@@ -315,9 +326,20 @@ def read_word_file(file_path):
             heading_level = get_heading_level(block)
             if is_heading(block):
                 current_heading = get_heading_text(block, numbering_state)
+                if not is_toc:
+                    if heading_level is not None:
+                        heading_stack[heading_level] = current_heading
+                        for level in list(heading_stack):
+                            if level > heading_level:
+                                heading_stack.pop(level, None)
+                    else:
+                        heading_stack = {1: current_heading}
+                    current_section_key = make_section_key(heading_stack)
+
                 results.append({
                     "file_name": file_name,
                     "heading": current_heading,
+                    "section_key": current_section_key,
                     "location": f"正文-段落{paragraph_index}",
                     "source_type": "正文",
                     "text": text,
@@ -329,6 +351,7 @@ def read_word_file(file_path):
                 results.append({
                     "file_name": file_name,
                     "heading": current_heading,
+                    "section_key": current_section_key,
                     "location": f"正文-段落{paragraph_index}",
                     "source_type": "正文",
                     "text": text,
@@ -350,6 +373,7 @@ def read_word_file(file_path):
                     results.append({
                         "file_name": file_name,
                         "heading": current_heading,
+                        "section_key": current_section_key,
                         "location": f"正文-表格{table_index}-第{row_index}行",
                         "source_type": "正文表格",
                         "text": " | ".join(row_texts),
@@ -362,6 +386,7 @@ def read_word_file(file_path):
                 results.append({
                     "file_name": file_name,
                     "heading": "页眉",
+                    "section_key": "页眉",
                     "location": f"第{section_index}节页眉-段落{p_index}",
                     "source_type": "页眉",
                     "text": text,
@@ -378,6 +403,7 @@ def read_word_file(file_path):
                     results.append({
                         "file_name": file_name,
                         "heading": "页眉",
+                        "section_key": "页眉",
                         "location": f"第{section_index}节页眉-表格{table_index}-第{row_index}行",
                         "source_type": "页眉表格",
                         "text": " | ".join(row_texts),
@@ -389,6 +415,7 @@ def read_word_file(file_path):
                 results.append({
                     "file_name": file_name,
                     "heading": "页脚",
+                    "section_key": "页脚",
                     "location": f"第{section_index}节页脚-段落{p_index}",
                     "source_type": "页脚",
                     "text": text,
@@ -405,6 +432,7 @@ def read_word_file(file_path):
                     results.append({
                         "file_name": file_name,
                         "heading": "页脚",
+                        "section_key": "页脚",
                         "location": f"第{section_index}节页脚-表格{table_index}-第{row_index}行",
                         "source_type": "页脚表格",
                         "text": " | ".join(row_texts),

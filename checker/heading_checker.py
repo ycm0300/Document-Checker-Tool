@@ -37,6 +37,7 @@ def make_heading_issue(item, issue):
         "file_name": item["file_name"],
         "issue_type": "标题层级",
         "heading": item["heading"],
+        "section_key": item.get("section_key", item["heading"]),
         "location": item["location"],
         "content": item["heading"],
         "issue": issue,

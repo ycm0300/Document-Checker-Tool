@@ -22,6 +22,7 @@ def check_item(item):
             "file_name": item["file_name"],
             "issue_type": "厂商残留",
             "heading": item["heading"],
+            "section_key": item.get("section_key", item["heading"]),
             "location": item["location"],
             "content": text,
             "issue": issue,
