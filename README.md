@@ -4,7 +4,7 @@
 
 ## 当前版本
 
-V0.3.0
+V0.4.0
 
 ## 功能说明
 
@@ -18,9 +18,25 @@ V0.3.0
 - 检查英文文档中的中文残留。
 - 检查厂商名称、网址、邮箱、电话、地址等残留信息。
 - 检查中文标点、连续空格、英文标点空格等常见英文格式问题。
+- 检查一级标题是否按要求新起页面。
+- 检查 Figure 标题是否可能未被正文引用。
+- 检查同一最小小节内是否存在重复正文段落。
 - 导出总检查结果 Excel。
 - 导出标题目录 Excel。
 - 对标题目录进行编号连续性、重复编号和相对编号检查。
+
+## V0.4.0 更新
+
+本版本主要新增文档版式、引用关系和内容质量检查，并优化报告定位方式。
+
+主要调整：
+
+- 新增一级标题分页检查，识别 Heading 1 / 标题 1 是否设置为新页开始。
+- 新增一级标题前多余空段落检查，识别分页符或分节符与一级标题之间存在空段落的情况。
+- 新增 Figure 引用检查，提示只出现一次、可能未被正文引用的 Figure 编号。
+- 新增同一最小小节内重复正文段落检查，减少跨章节标准句式带来的误报。
+- 优化相对四级标题的问题定位显示，例如 `8.1.1 SuperPod > 1 Super Node Details`。
+- 报告文件改为固定文件名，每次运行覆盖刷新，避免输出目录产生过多历史报告。
 
 ## V0.3.0 更新
 
@@ -41,8 +57,11 @@ V0.3.0
 document-compliance-checker/
 ├── checker/                # 检查逻辑
 │   ├── chinese_format_checker.py
+│   ├── content_quality_checker.py
 │   ├── english_format_checker.py
 │   ├── heading_checker.py
+│   ├── layout_checker.py
+│   ├── reference_checker.py
 │   └── vendor_checker.py
 ├── config/                 # 公共配置和检查规则
 │   ├── chinese_rules.py
@@ -80,9 +99,9 @@ python main.py
 程序会生成：
 
 - `*_读取结果.txt`
-- `总检查结果_YYYYMMDD_HHMMSS.xlsx`
-- `标题目录_YYYYMMDD_HHMMSS.xlsx`
-- `标题检查结果_YYYYMMDD_HHMMSS.xlsx`
+- `总检查结果.xlsx`
+- `标题目录.xlsx`
+- `标题检查结果.xlsx`
 
 ## 规则维护
 
