@@ -1,10 +1,10 @@
 # 输入文档：保留文件夹，不上传里面的文件
-Input/*
-!Input/.gitkeep
+input/*
+!input/.gitkeep
 
 # 输出目录：保留文件夹，不上传里面的文件
-Output/*
-!Output/.gitkeep
+output/*
+!output/.gitkeep
 
 # Python缓存
 __pycache__/
