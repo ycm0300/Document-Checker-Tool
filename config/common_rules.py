@@ -1,4 +1,4 @@
-from datetime import datetime
+# from datetime import datetime
 from pathlib import Path
 
 
@@ -27,18 +27,27 @@ def clean_cell(value):
 
 
 def get_summary_excel_name():
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return f"{SUMMARY_EXCEL_PREFIX}_{timestamp}.xlsx"
+    return f"{SUMMARY_EXCEL_PREFIX}.xlsx"
+    # 如需保留每次运行的历史报告，先取消文件顶部 datetime 导入的注释。
+    # 然后改用下面两行：
+    # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # return f"{SUMMARY_EXCEL_PREFIX}_{timestamp}.xlsx"
 
 
 def get_heading_catalog_excel_name():
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return f"{HEADING_CATALOG_EXCEL_PREFIX}_{timestamp}.xlsx"
+    return f"{HEADING_CATALOG_EXCEL_PREFIX}.xlsx"
+    # 如需保留每次运行的历史报告，先取消文件顶部 datetime 导入的注释。
+    # 然后改用下面两行：
+    # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # return f"{HEADING_CATALOG_EXCEL_PREFIX}_{timestamp}.xlsx"
 
 
 def get_heading_check_report_name():
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return f"{HEADING_CHECK_REPORT_PREFIX}_{timestamp}.xlsx"
+    return f"{HEADING_CHECK_REPORT_PREFIX}.xlsx"
+    # 如需保留每次运行的历史报告，先取消文件顶部 datetime 导入的注释。
+    # 然后改用下面两行：
+    # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # return f"{HEADING_CHECK_REPORT_PREFIX}_{timestamp}.xlsx"
 
 
 def safe_sheet_name(name):
