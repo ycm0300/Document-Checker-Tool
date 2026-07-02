@@ -28,6 +28,7 @@ def write_issue_sheet(sheet, issues):
         "厂商残留": 2,
         "术语问题": 3,
         "英文格式": 4,
+        "版式问题": 5,
     }
 
     sorted_issues = sorted(
@@ -141,7 +142,7 @@ def export_summary_excel(all_file_issues, output_file):
     summary_sheet = workbook.active
     summary_sheet.title = "汇总"
 
-    summary_headers = ["序号", "文档名称", "问题总数", "中文残留", "厂商残留", "英文格式"]
+    summary_headers = ["序号", "文档名称", "问题总数", "中文残留", "厂商残留", "英文格式", "版式问题"]
     summary_sheet.append(summary_headers)
 
     for col in range(1, len(summary_headers) + 1):
@@ -154,6 +155,7 @@ def export_summary_excel(all_file_issues, output_file):
         chinese_count = sum(1 for i in issues if i["issue_type"] == "中文残留")
         vendor_count = sum(1 for i in issues if i["issue_type"] == "厂商残留")
         format_count = sum(1 for i in issues if i["issue_type"] == "英文格式")
+        layout_count = sum(1 for i in issues if i["issue_type"] == "版式问题")
         summary_sheet.append([
             index,
             file_name,
@@ -161,9 +163,10 @@ def export_summary_excel(all_file_issues, output_file):
             chinese_count,
             vendor_count,
             format_count,
+            layout_count,
         ])
 
-    summary_widths = [8, 50, 12, 12, 12, 12]
+    summary_widths = [8, 50, 12, 12, 12, 12, 12]
     for i, width in enumerate(summary_widths, start=1):
         summary_sheet.column_dimensions[get_column_letter(i)].width = width
 

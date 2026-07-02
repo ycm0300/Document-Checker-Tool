@@ -1,6 +1,7 @@
 from checker.chinese_format_checker import check_item as check_chinese_item
 from checker.english_format_checker import check_item as check_english_format_item
 from checker.heading_checker import check_heading_catalog_sheet
+from checker.layout_checker import check_heading1_starts_new_page
 from checker.vendor_checker import check_item as check_vendor_item
 from config.common_rules import (
     INPUT_DIR,
@@ -86,6 +87,7 @@ def main():
         print(f"读取结果已输出：{read_txt_file}")
 
         issues = check_items(items)
+        issues.extend(check_heading1_starts_new_page(word_file))
         all_file_issues[word_file.name] = issues
 
         print(f"检查完成：{word_file.name}，发现 {len(issues)} 个问题")
