@@ -9,6 +9,9 @@ from docx.text.paragraph import Paragraph
 from config.common_rules import clean_text
 
 
+LETTER_HEADING_PATTERN = re.compile(r"^([A-Z])(?:\.(\d+(?:\.\d+)*))?\.?\s+.+")
+
+
 def is_heading(paragraph):
     """判断一个段落是否像章节标题。"""
     text = clean_text(paragraph.text)
@@ -24,6 +27,9 @@ def is_heading(paragraph):
     if re.match(r"^\d+(\.\d+)*\s+.+", text):
         return True
 
+    if re.match(r"^[A-Z](?:\.\s+|\.\d+(?:\.\d+)*\s+).+", text):
+        return True
+
     return False
 
 
@@ -34,6 +40,28 @@ def get_heading_level(paragraph):
     if not match:
         return None
     return int(match.group(1))
+
+
+def get_letter_heading_level(text):
+    """识别附录类字母标题层级：A/A. 为 1 级，A.1 为 2 级。"""
+    match = LETTER_HEADING_PATTERN.match(clean_text(text))
+    if not match:
+        return None
+
+    sub_number = match.group(2)
+    if not sub_number:
+        return 1
+
+    return len(sub_number.split(".")) + 1
+
+
+def get_effective_heading_level(paragraph, heading_text):
+    """优先用附录字母编号修正 Word 样式层级。"""
+    letter_level = get_letter_heading_level(heading_text)
+    if letter_level is not None:
+        return letter_level
+
+    return get_heading_level(paragraph)
 
 
 def is_toc_paragraph(paragraph):
@@ -89,6 +117,11 @@ def get_paragraph_num_pr(paragraph):
         style = style.base_style
 
     return None
+
+
+def get_paragraph_xml_text(paragraph):
+    """读取段落内所有 XML 文本，包含部分 python-docx paragraph.text 漏掉的字段结果。"""
+    return clean_text("".join(t.text or "" for t in paragraph._p.iter(qn("w:t"))))
 
 
 def get_paragraph_num_id_and_level(paragraph):
@@ -317,15 +350,19 @@ def read_word_file(file_path):
     for block in iter_block_items(document):
         if isinstance(block, Paragraph):
             text = clean_text(block.text)
+            xml_text = get_paragraph_xml_text(block)
+            if not text and xml_text:
+                text = xml_text
+
             if not text:
                 continue
 
             paragraph_index += 1
 
             is_toc = is_toc_paragraph(block)
-            heading_level = get_heading_level(block)
             if is_heading(block):
                 current_heading = get_heading_text(block, numbering_state)
+                heading_level = get_effective_heading_level(block, current_heading)
                 if not is_toc:
                     if heading_level is not None:
                         heading_stack[heading_level] = current_heading
@@ -343,6 +380,7 @@ def read_word_file(file_path):
                     "location": f"正文-段落{paragraph_index}",
                     "source_type": "正文",
                     "text": text,
+                    "xml_text": xml_text,
                     "is_heading": not is_toc,
                     "is_toc": is_toc,
                     "heading_level": heading_level,
@@ -355,6 +393,7 @@ def read_word_file(file_path):
                     "location": f"正文-段落{paragraph_index}",
                     "source_type": "正文",
                     "text": text,
+                    "xml_text": xml_text,
                     "is_heading": False,
                     "is_toc": False,
                     "heading_level": None,

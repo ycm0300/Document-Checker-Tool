@@ -4,7 +4,7 @@
 
 ## 当前版本
 
-V0.4.0
+V0.4.1
 
 ## 功能说明
 
@@ -24,6 +24,17 @@ V0.4.0
 - 导出总检查结果 Excel。
 - 导出标题目录 Excel。
 - 对标题目录进行编号连续性、重复编号和相对编号检查。
+
+## V0.4.1 更新
+
+本版本主要优化分组运行、附录标题识别和 Figure 引用匹配。
+
+主要调整：
+
+- 支持按输入分组单独运行，例如 `python main.py SuperPOD`。
+- 支持直接传入输入分组路径，例如 `python main.py .\input\SuperPOD\`。
+- 修复附录类字母标题层级识别，例如 `A. Exit Status Codes` 会作为附录一级标题处理。
+- 优化 Figure 引用检查，兼容 Word 自动编号字段中 `Figure - Title` / `Figure 11 Title` 与正文 `Figure 1-1 Title` 的匹配。
 
 ## V0.4.0 更新
 
@@ -83,6 +94,26 @@ python main.py
 ```
 
 3. 程序会扫描 `input` 及其子目录，并优先使用 `input` 下的一级子目录名作为分组名，检查结果输出到 `output` 下同名目录。
+
+如果只需要检查某个分组，可以在命令后面加分组名：
+
+```bash
+python main.py SuperPOD
+python main.py KSManageV2.5
+```
+
+也可以直接传入 `input` 下的分组路径：
+
+```bash
+python main.py .\input\SuperPOD\
+python main.py .\input\KSManageV2.5\
+```
+
+也可以一次检查多个分组：
+
+```bash
+python main.py SuperPOD KSManageV2.5
+```
 
 当前分组规则：
 

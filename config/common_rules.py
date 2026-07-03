@@ -27,7 +27,7 @@ def get_document_group(file_name):
 
 def get_document_group_from_path(file_path):
     """优先使用 input 下的一级子文件夹作为批次名。"""
-    relative_path = file_path.relative_to(INPUT_DIR)
+    relative_path = file_path.resolve().relative_to(INPUT_DIR.resolve())
 
     if len(relative_path.parts) > 1:
         return relative_path.parts[0]

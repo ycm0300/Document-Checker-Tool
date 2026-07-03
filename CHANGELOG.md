@@ -2,6 +2,19 @@
 
 本文件用于记录项目每个版本的主要变化。
 
+## V0.4.1
+
+### 新增
+
+- 支持按输入分组单独执行检查，例如 `python main.py SuperPOD`。
+- 支持传入输入分组路径执行检查，例如 `python main.py .\input\SuperPOD\`。
+
+### 修复
+
+- 修复附录类字母标题被挂到前一数字章节下的问题。
+- 修复 `A. Exit Status Codes`、`B. JSON Output Format` 等字母附录标题在标题目录中编号为空的问题。
+- 修复部分 Word 自动编号 Figure 题注被读取为 `Figure - 标题` 或 `Figure 11 标题` 后无法与正文 `Figure 1-1 标题` 匹配的问题。
+
 ## V0.4.0
 
 ### 新增

@@ -11,6 +11,10 @@ def split_heading_number_and_title(heading_text):
     match = re.match(r"^(\d+(?:\.\d+)*)\s+(.+)$", text)
     if match:
         return match.group(1), match.group(2)
+
+    match = re.match(r"^([A-Z](?:\.\d+)*)(?:\.)?\s+(.+)$", text)
+    if match:
+        return match.group(1), match.group(2)
     return "", text
 
 

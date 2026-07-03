@@ -1,3 +1,6 @@
+import sys
+from pathlib import Path
+
 from checker.chinese_format_checker import check_item as check_chinese_item
 from checker.content_quality_checker import check_duplicate_paragraphs
 from checker.english_format_checker import check_item as check_english_format_item
@@ -72,6 +75,55 @@ def group_word_files(word_files):
     return grouped_files
 
 
+def normalize_selected_group_name(selected_name):
+    selected_path = Path(selected_name)
+
+    if selected_path.exists():
+        if selected_path.is_dir():
+            try:
+                relative_path = selected_path.resolve().relative_to(INPUT_DIR.resolve())
+                if relative_path.parts:
+                    return relative_path.parts[0]
+            except ValueError:
+                pass
+            return selected_path.name
+
+        if selected_path.is_file():
+            try:
+                return get_document_group_from_path(selected_path)
+            except ValueError:
+                return selected_path.parent.name
+
+    return selected_name.rstrip("\\/").split("\\")[-1].split("/")[-1]
+
+
+def filter_groups(grouped_files, selected_group_names):
+    if not selected_group_names:
+        return grouped_files
+
+    normalized_names = {
+        group_name.lower(): group_name
+        for group_name in grouped_files
+    }
+    selected_groups = {}
+
+    for selected_name in selected_group_names:
+        selected_group_name = normalize_selected_group_name(selected_name)
+        group_name = normalized_names.get(selected_group_name.lower())
+        if group_name:
+            selected_groups[group_name] = grouped_files[group_name]
+
+    missing_groups = [
+        group_name for group_name in selected_group_names
+        if normalize_selected_group_name(group_name).lower() not in normalized_names
+    ]
+    if missing_groups:
+        print(f"未找到指定分组：{', '.join(missing_groups)}")
+        print(f"可用分组：{', '.join(grouped_files)}")
+
+    return selected_groups
+
+
 def process_group(group_name, word_files):
     output_dir = OUTPUT_DIR / group_name
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -112,6 +164,7 @@ def process_group(group_name, word_files):
 
 def main():
     OUTPUT_DIR.mkdir(exist_ok=True)
+    selected_group_names = sys.argv[1:]
 
     word_files = sorted([
         file for file in INPUT_DIR.rglob("*.docx")
@@ -123,6 +176,10 @@ def main():
         return
 
     grouped_files = group_word_files(word_files)
+    grouped_files = filter_groups(grouped_files, selected_group_names)
+    if not grouped_files:
+        return
+
     for group_name, group_files in grouped_files.items():
         process_group(group_name, group_files)
 
