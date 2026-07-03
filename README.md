@@ -59,8 +59,8 @@ document-compliance-checker/
 │   ├── english_rules.py
 │   └── vendor_rules.py
 ├── docs/                   # 项目文档目录
-├── input/                  # 输入 Word 文档目录，实际文档不上传
-├── output/                 # 输出检查结果目录，实际结果不上传
+├── input/                  # 输入 Word 文档目录，可按文档分组放入子目录
+├── output/                 # 输出检查结果目录，会按文档分组生成子目录
 ├── parser/                 # Word 读取和标题目录解析
 │   ├── heading_catalog.py
 │   └── word_reader.py
@@ -75,18 +75,25 @@ document-compliance-checker/
 
 ## 使用说明
 
-1. 将需要检查的 `.docx` 文档放入 `input` 目录。
+1. 将需要检查的 `.docx` 文档按分组放入 `input` 下的子目录，例如 `input/SuperPOD` 和 `input/KSManageV2.5`。
 2. 运行主程序：
 
 ```bash
 python main.py
 ```
 
-3. 检查结果会输出到 `output` 目录。
+3. 程序会扫描 `input` 及其子目录，并优先使用 `input` 下的一级子目录名作为分组名，检查结果输出到 `output` 下同名目录。
+
+当前分组规则：
+
+- `input/SuperPOD/*.docx`：输出到 `output/SuperPOD`
+- `input/KSManageV2.5/*.docx`：输出到 `output/KSManageV2.5`
+- `input/其他文件夹/*.docx`：输出到 `output/其他文件夹`
+- 直接放在 `input` 根目录的文档，会按文件名规则兜底分到 `SuperPOD`、`KSManageV2.5` 或 `Unclassified`
 
 ## 输出文件
 
-程序会生成：
+每个输出分组目录下会生成：
 
 - `*_读取结果.txt`
 - `总检查结果.xlsx`

@@ -6,7 +6,6 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from config.common_rules import (
-    OUTPUT_DIR,
     get_heading_check_report_name,
     safe_sheet_name,
 )
@@ -14,6 +13,20 @@ from parser.heading_catalog import get_heading_rows
 
 
 RELATIVE_HEADING_PATTERN = re.compile(r"^\d+\.?\s+.+")
+
+
+def get_unique_sheet_name(name, used_names):
+    base_name = safe_sheet_name(name)
+    sheet_name = base_name
+    counter = 1
+
+    while sheet_name in used_names:
+        suffix = f"_{counter}"
+        sheet_name = f"{base_name[:31 - len(suffix)]}{suffix}"
+        counter += 1
+
+    used_names.add(sheet_name)
+    return sheet_name
 
 
 def format_issue_heading(issue):
@@ -117,12 +130,13 @@ def export_heading_catalog_excel(all_file_items, output_file):
 
     detail_headers = ["序号", "标题编号", "标题名称", "Heading级别", "位置", "完整标题"]
     detail_widths = [8, 16, 50, 16, 24, 70]
+    used_sheet_names = {"汇总"}
 
     for file_index, (file_name, items) in enumerate(all_file_items.items(), start=1):
         heading_rows = get_heading_rows(items)
         summary_sheet.append([file_index, file_name, len(heading_rows)])
 
-        sheet_name = safe_sheet_name(Path(file_name).stem)
+        sheet_name = get_unique_sheet_name(Path(file_name).stem, used_sheet_names)
         sheet = workbook.create_sheet(title=sheet_name)
         sheet.append(detail_headers)
 
@@ -195,9 +209,10 @@ def export_summary_excel(all_file_issues, output_file):
 
     summary_sheet.freeze_panes = "A2"
     summary_sheet.auto_filter.ref = summary_sheet.dimensions
+    used_sheet_names = {"汇总"}
 
     for file_name, issues in all_file_issues.items():
-        sheet_name = safe_sheet_name(Path(file_name).stem)
+        sheet_name = get_unique_sheet_name(Path(file_name).stem, used_sheet_names)
         sheet = workbook.create_sheet(title=sheet_name)
 
         if issues:
@@ -219,7 +234,7 @@ def _unpack_heading_check_result(sheet_name, result):
     return sheet_name, result
 
 
-def export_heading_check_report(all_results):
+def export_heading_check_report(all_results, output_dir):
     workbook = Workbook()
     summary_sheet = workbook.active
     summary_sheet.title = "汇总"
@@ -230,9 +245,13 @@ def export_heading_check_report(all_results):
         document_name, issues = _unpack_heading_check_result(sheet_name, result)
         summary_sheet.append([document_name, len(issues)])
 
+    used_sheet_names = {"汇总"}
+
     for sheet_name, result in all_results.items():
         _, issues = _unpack_heading_check_result(sheet_name, result)
-        detail_sheet = workbook.create_sheet(safe_sheet_name(sheet_name))
+        detail_sheet = workbook.create_sheet(
+            get_unique_sheet_name(sheet_name, used_sheet_names)
+        )
         detail_sheet.append(["类型", "编号", "原始内容", "完整标题", "说明"])
 
         if not issues:
@@ -241,7 +260,7 @@ def export_heading_check_report(all_results):
             for issue in issues:
                 detail_sheet.append(issue)
 
-    output_file = OUTPUT_DIR / get_heading_check_report_name()
+    output_file = output_dir / get_heading_check_report_name()
     workbook.save(output_file)
     print("输出：", output_file)
     return output_file
