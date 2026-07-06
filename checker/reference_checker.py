@@ -4,10 +4,38 @@ from config.common_rules import clean_text
 
 
 FIGURE_REFERENCE_PATTERN = re.compile(r"\bFigure\s+(\d+(?:[-.]\d+)*)\b", re.IGNORECASE)
+SECTION_NUMBER_PATTERN = re.compile(r"^(\d+)(?:\.\d+)*\s+")
 
 
 def _figure_number_key(figure_number):
     return re.sub(r"[-.]", "", figure_number)
+
+
+def _get_section_chapter_number(item):
+    section_key = item.get("section_key") or item.get("heading", "")
+    for part in str(section_key).split(">"):
+        match = SECTION_NUMBER_PATTERN.match(clean_text(part))
+        if match:
+            return match.group(1)
+    return None
+
+
+def _display_figure_number(figure_number, item):
+    if "-" in figure_number:
+        return figure_number
+
+    if "." in figure_number:
+        return figure_number.replace(".", "-")
+
+    chapter_number = _get_section_chapter_number(item)
+    if not chapter_number or not figure_number.startswith(chapter_number):
+        return figure_number
+
+    rest = figure_number[len(chapter_number):]
+    if not rest or rest == "0":
+        return figure_number
+
+    return f"{chapter_number}-{rest}"
 
 
 def _iter_text_figure_mentions(text):
@@ -46,6 +74,7 @@ def check_figure_references(items):
             continue
 
         figure_number, item = mentions[0]
+        display_figure_number = _display_figure_number(figure_number, item)
         issues.append({
             "file_name": item["file_name"],
             "issue_type": "引用问题",
@@ -53,7 +82,7 @@ def check_figure_references(items):
             "section_key": item.get("section_key", item["heading"]),
             "location": item["location"],
             "content": item["text"],
-            "issue": f"Figure {figure_number} 仅出现一次，可能未被正文引用",
+            "issue": f"Figure {display_figure_number} 仅出现一次，可能未被正文引用",
         })
 
     return issues
