@@ -2,9 +2,14 @@
 
 一个用于英文 Word 文档内容合规检查的小工具。
 
+项目同时提供两种使用方式：
+
+- 命令行模式：批量扫描 `input` 目录并将报告输出到 `output`。
+- Web 页面模式：在浏览器中上传 Word 文档，实时查看检查进度、预览结果并下载报告。
+
 ## 当前版本
 
-V0.4.1
+V0.5.0
 
 ## 功能说明
 
@@ -24,6 +29,23 @@ V0.4.1
 - 导出总检查结果 Excel。
 - 导出标题目录 Excel。
 - 对标题目录进行编号连续性、重复编号和相对编号检查。
+- 通过 Web 页面上传一个或多个 Word 文档并直接执行检查。
+- 实时展示当前文件、检查阶段和整体检查进度。
+- 在页面中预览各 Sheet，并下载 Excel 或 Markdown 结果。
+
+## V0.5.0 更新
+
+本版本新增完整的 Web 检查流程和检查进度展示。
+
+主要调整：
+
+- 新增 FastAPI 后端，支持多文档上传、检查结果恢复和 Excel 下载。
+- 新增 Vue Web 页面，可直接上传 `.docx` 文件并预览检查结果。
+- 新增实时进度条，展示上传、文档读取、规则检查和报告生成阶段。
+- 同一文件名组合再次上传时沿用任务编号，并在成功后安全替换旧结果。
+- 每个 Web 文档单独归档原文、问题数据和更新时间。
+- 新增 `start.ps1`，可一键启动 Python API 和前端开发服务器。
+- 补充 Web 启动、使用、存储和接口说明文档。
 
 ## V0.4.1 更新
 
@@ -72,6 +94,11 @@ document-compliance-checker/
 │   ├── english_rules.py
 │   └── vendor_rules.py
 ├── docs/                   # 项目文档目录
+│   └── WEB_SYSTEM_ANALYSIS.md # Web 上传、存储和接口分析
+├── Frontend/
+│   └── frontend/           # Vue 3 + Vite Web 页面
+│       ├── src/App.vue     # 上传、进度条和结果预览页面
+│       └── vite.config.js  # 开发服务器及 API 代理配置
 ├── input/                  # 输入 Word 文档目录，可按文档分组放入子目录
 ├── output/                 # 输出检查结果目录，会按文档分组生成子目录
 ├── parser/                 # Word 读取和标题目录解析
@@ -81,6 +108,10 @@ document-compliance-checker/
 │   ├── excel_writer.py
 │   └── txt_writer.py
 ├── main.py                 # 主程序入口
+├── web_api.py              # FastAPI 上传、进度、结果和下载接口
+├── web_service.py          # Web 文档检查及 Excel 数据转换服务
+├── requirements.txt        # Python 依赖
+├── start.ps1               # Web 前后端一键启动脚本
 ├── README.md               # 项目说明
 ├── CHANGELOG.md            # 版本变更记录
 └── .gitignore              # Git 忽略配置
