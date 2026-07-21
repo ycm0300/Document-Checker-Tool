@@ -1,16 +1,22 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import MarkdownIt from 'markdown-it'
-import * as XLSX from 'xlsx'
 
 const markdown = new MarkdownIt({ html: false, linkify: true, typographer: true })
 const fileInput = ref(null)
+const selectedFiles = ref([])
+const currentJobId = ref('')
 const resultFileName = ref('')
-const resultFile = ref(null)
+const excelDownloadUrl = ref('')
 const sheets = ref([])
 const selectedSheetName = ref('')
 const errorMessage = ref('')
 const isLoading = ref(false)
+const checkProgress = ref(0)
+const progressMessage = ref('')
+const currentSelectionChecked = ref(false)
+const LAST_JOB_KEY = 'document-checker:last-job-id'
+const LAST_SHEET_KEY = 'document-checker:last-sheet-name'
 
 const selectedSheet = computed(() =>
   sheets.value.find((sheet) => sheet.name === selectedSheetName.value),
@@ -47,35 +53,122 @@ function rowsToMarkdown(name, rows) {
   return `${lines.join('\n')}\n`
 }
 
-async function handleResultFile(event) {
-  const file = event.target.files?.[0]
-  if (!file) return
+function applyJobResult(data, preferredSheetName = '') {
+  sheets.value = data.sheets.map((sheet) => ({
+    name: sheet.name,
+    markdown: rowsToMarkdown(sheet.name, sheet.rows),
+  }))
+  currentJobId.value = data.jobId
+  resultFileName.value = data.fileName
+  excelDownloadUrl.value = data.excelDownloadUrl
+  selectedSheetName.value = sheets.value.some((sheet) => sheet.name === preferredSheetName)
+    ? preferredSheetName
+    : (sheets.value[0]?.name ?? '')
+  localStorage.setItem(LAST_JOB_KEY, data.jobId)
+}
 
+function handleWordFiles(event) {
+  selectedFiles.value = Array.from(event.target.files ?? [])
+  currentSelectionChecked.value = false
+  errorMessage.value = ''
+}
+
+async function startCheck() {
+  if (currentSelectionChecked.value) return
+  if (!selectedFiles.value.length) {
+    errorMessage.value = '请先选择至少一个 Word 文档。'
+    return
+  }
   errorMessage.value = ''
   isLoading.value = true
+  checkProgress.value = 1
+  progressMessage.value = '准备上传文档'
+  const progressId = crypto.randomUUID().replaceAll('-', '')
+  const progressTimer = window.setInterval(async () => {
+    try {
+      const response = await fetch(`/api/check-progress/${progressId}`)
+      if (!response.ok) return
+      const progress = await response.json()
+      checkProgress.value = progress.percent
+      progressMessage.value = progress.message
+    } catch {
+      // 主检查请求负责展示连接错误，进度轮询失败无需重复提示。
+    }
+  }, 300)
   try {
-    const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' })
-    sheets.value = workbook.SheetNames.map((name) => {
-      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[name], {
-        header: 1,
-        defval: '',
-        raw: false,
-      })
-      return { name, markdown: rowsToMarkdown(name, rows) }
+    const formData = new FormData()
+    selectedFiles.value.forEach((file) => formData.append('files', file))
+    const response = await fetch('/api/check', {
+      method: 'POST',
+      headers: { 'X-Progress-ID': progressId },
+      body: formData,
     })
-    resultFileName.value = file.name
-    resultFile.value = file
-    selectedSheetName.value = sheets.value[0]?.name ?? ''
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.detail || '检查请求失败')
+
+    applyJobResult(data)
+    currentSelectionChecked.value = true
+    checkProgress.value = 100
+    progressMessage.value = '检查完成'
   } catch (error) {
     sheets.value = []
     selectedSheetName.value = ''
     resultFileName.value = ''
-    resultFile.value = null
-    errorMessage.value = `无法读取 Excel 文件：${error.message}`
+    excelDownloadUrl.value = ''
+    errorMessage.value = error.message.includes('fetch')
+      ? '无法连接 Python 检查服务，请确认后端已启动。'
+      : error.message
+  } finally {
+    window.clearInterval(progressTimer)
+    isLoading.value = false
+  }
+}
+
+async function restoreLastResult() {
+  const jobId = localStorage.getItem(LAST_JOB_KEY)
+  if (!jobId) return
+
+  isLoading.value = true
+  errorMessage.value = ''
+  try {
+    const response = await fetch(`/api/jobs/${jobId}`)
+    const data = await response.json()
+    if (!response.ok) throw Object.assign(new Error(data.detail || '无法恢复上次检查结果'), { status: response.status })
+    applyJobResult(data, localStorage.getItem(LAST_SHEET_KEY) || '')
+  } catch (error) {
+    if (error.status === 404) {
+      localStorage.removeItem(LAST_JOB_KEY)
+      localStorage.removeItem(LAST_SHEET_KEY)
+      errorMessage.value = '上次检查结果已不存在，请重新上传文档检查。'
+    } else {
+      errorMessage.value = '暂时无法恢复上次结果，请确认 Python 检查服务已启动。'
+    }
   } finally {
     isLoading.value = false
   }
 }
+
+function clearCurrentResult() {
+  currentJobId.value = ''
+  resultFileName.value = ''
+  excelDownloadUrl.value = ''
+  sheets.value = []
+  selectedSheetName.value = ''
+  selectedFiles.value = []
+  currentSelectionChecked.value = false
+  checkProgress.value = 0
+  progressMessage.value = ''
+  if (fileInput.value) fileInput.value.value = ''
+  errorMessage.value = ''
+  localStorage.removeItem(LAST_JOB_KEY)
+  localStorage.removeItem(LAST_SHEET_KEY)
+}
+
+watch(selectedSheetName, (name) => {
+  if (name) localStorage.setItem(LAST_SHEET_KEY, name)
+})
+
+onMounted(restoreLastResult)
 
 function downloadMarkdown(content, fileName) {
   const blob = new Blob(['\uFEFF', content], { type: 'text/markdown;charset=utf-8' })
@@ -107,13 +200,11 @@ function downloadAllSheets() {
 }
 
 function downloadOriginalExcel() {
-  if (!resultFile.value) return
-  const url = URL.createObjectURL(resultFile.value)
+  if (!excelDownloadUrl.value) return
   const link = document.createElement('a')
-  link.href = url
-  link.download = resultFile.value.name
+  link.href = excelDownloadUrl.value
+  link.download = resultFileName.value || '总检查结果.xlsx'
   link.click()
-  URL.revokeObjectURL(url)
 }
 </script>
 
@@ -123,40 +214,61 @@ function downloadOriginalExcel() {
       <div>
         <p class="eyebrow">DOCUMENT COMPLIANCE</p>
         <h1>文档合规检查工具</h1>
-        <p class="subtitle">导入 Python 生成的多 Sheet Excel，按 Sheet 查看和导出 Markdown。</p>
+        <p class="subtitle">上传 Word 文档，调用 Python 检查并按 Sheet 预览结果。</p>
       </div>
-      <span class="status-badge">本地处理 · 文件不会上传</span>
+      <span class="status-badge">本机 Python 服务</span>
     </header>
 
     <section class="workspace">
       <aside class="panel control-panel">
         <div class="panel-heading">
           <span class="step">1</span>
-          <div><h2>导入检查结果</h2><p>支持 .xlsx 和 .xls 文件</p></div>
+          <div><h2>上传待检文档</h2><p>支持一个或多个 .docx 文件</p></div>
         </div>
 
         <input
           ref="fileInput"
           class="sr-only"
           type="file"
-          accept=".xlsx,.xls"
-          @change="handleResultFile"
+          accept=".docx"
+          multiple
+          @change="handleWordFiles"
         />
         <button class="upload-box" type="button" @click="fileInput.click()">
           <span class="upload-icon">↑</span>
-          <strong>{{ resultFileName || '选择检查结果 Excel' }}</strong>
-          <small>{{ resultFileName ? '点击可重新选择文件' : 'Python 输出的总检查结果.xlsx' }}</small>
+          <strong>{{ selectedFiles.length ? `已选择 ${selectedFiles.length} 个文档` : '选择 Word 文档' }}</strong>
+          <small>{{ selectedFiles.length ? selectedFiles.map(file => file.name).join('、') : '可同时选择多个 .docx 文件' }}</small>
         </button>
 
         <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
 
         <div class="info-card">
-          <span>Sheet 数量</span><strong>{{ sheets.length }}</strong>
+          <span>待检查文档</span><strong>{{ selectedFiles.length }}</strong>
+        </div>
+
+        <div v-if="isLoading" class="progress-card" aria-live="polite">
+          <div class="progress-label">
+            <span>{{ progressMessage || '正在检查文档' }}</span>
+            <strong>{{ checkProgress }}%</strong>
+          </div>
+          <div
+            class="progress-track"
+            role="progressbar"
+            aria-label="文件检查进度"
+            :aria-valuenow="checkProgress"
+            aria-valuemin="0"
+            aria-valuemax="100"
+          >
+            <span class="progress-fill" :style="{ width: `${checkProgress}%` }"></span>
+          </div>
         </div>
 
         <div class="download-actions">
-          <button class="excel-button" type="button" :disabled="!resultFile" @click="downloadOriginalExcel">
-            下载原始 Excel
+          <button class="primary-button" type="button" :disabled="!selectedFiles.length || isLoading || currentSelectionChecked" @click="startCheck">
+            {{ isLoading ? '正在检查…' : currentSelectionChecked ? '本批文档已检查' : '开始检查' }}
+          </button>
+          <button class="excel-button" type="button" :disabled="!excelDownloadUrl" @click="downloadOriginalExcel">
+            下载检查结果 Excel
           </button>
           <button class="primary-button" type="button" :disabled="!sheets.length" @click="downloadAllSheets">
             下载完整 Markdown
@@ -174,7 +286,7 @@ function downloadOriginalExcel() {
             <label>
               <span>Sheet</span>
               <select v-model="selectedSheetName" :disabled="!sheets.length">
-                <option v-if="!sheets.length" value="">请先导入 Excel</option>
+                <option v-if="!sheets.length" value="">暂无检查结果</option>
                 <option v-for="sheet in sheets" :key="sheet.name" :value="sheet.name">
                   {{ sheet.name }}
                 </option>
@@ -183,15 +295,18 @@ function downloadOriginalExcel() {
             <button class="secondary-button" type="button" :disabled="!selectedSheet" @click="downloadCurrentSheet">
               下载当前 MD
             </button>
+            <button class="clear-button" type="button" :disabled="!currentJobId" @click="clearCurrentResult">
+              清除结果
+            </button>
           </div>
         </div>
 
-        <div v-if="isLoading" class="empty-state">正在读取 Excel...</div>
+        <div v-if="isLoading" class="empty-state">Python 正在读取并检查 Word 文档，请稍候...</div>
         <article v-else-if="selectedSheet" class="markdown-body" v-html="renderedMarkdown"></article>
         <div v-else class="empty-state">
           <div class="empty-icon">MD</div>
           <strong>暂无预览内容</strong>
-          <p>从左侧选择 Python 生成的检查结果 Excel</p>
+          <p>从左侧选择 Word 文档并开始检查</p>
         </div>
       </section>
     </section>
@@ -218,9 +333,16 @@ h1 { margin: 0; font-size: 30px; letter-spacing: -.03em; }
 .upload-box small { color: #98a2b3; }
 .info-card { margin: 16px 0; padding: 12px 14px; display: flex; justify-content: space-between; border-radius: 9px; background: #f7f8fa; color: #667085; font-size: 13px; }
 .info-card strong { color: #172033; }
+.progress-card { margin: -4px 0 16px; }
+.progress-label { margin-bottom: 7px; display: flex; justify-content: space-between; gap: 10px; color: #667085; font-size: 12px; }
+.progress-label span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.progress-label strong { flex: none; color: #2563eb; }
+.progress-track { height: 8px; overflow: hidden; border-radius: 999px; background: #e8eef8; }
+.progress-fill { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #2563eb, #60a5fa); transition: width .25s ease; }
 .primary-button,.secondary-button { height: 38px; padding: 0 14px; border-radius: 8px; font-weight: 650; cursor: pointer; }
 .primary-button { width: 100%; border: 0; background: #2563eb; color: white; }
 .secondary-button { border: 1px solid #d5dce7; background: #fff; color: #344054; white-space: nowrap; }
+.clear-button { height: 38px; padding: 0 13px; border: 1px solid #efc5c2; border-radius: 8px; background: #fff8f7; color: #b42318; font-weight: 650; cursor: pointer; white-space: nowrap; }
 .download-actions { display: grid; gap: 9px; }
 .excel-button { width: 100%; height: 38px; padding: 0 14px; border: 1px solid #b8d8c5; border-radius: 8px; background: #f0faf4; color: #187044; font-weight: 650; cursor: pointer; }
 .excel-button:hover:not(:disabled) { background: #e4f6eb; border-color: #80bd99; }
@@ -239,7 +361,7 @@ select { min-width: 250px; height: 38px; padding: 0 34px 0 11px; border: 1px sol
 .markdown-body :deep(h2) { margin: 0 0 18px; color: #172033; font-size: 22px; }
 .markdown-body :deep(table) { width: max-content; min-width: 100%; border-collapse: collapse; font-size: 13px; }
 .markdown-body :deep(th),.markdown-body :deep(td) { max-width: 440px; padding: 10px 12px; border: 1px solid #dfe5ee; text-align: left; vertical-align: top; white-space: normal; overflow-wrap: anywhere; }
-.markdown-body :deep(th) { position: sticky; top: 0; background: #f0f5fc; color: #344054; }
+.markdown-body :deep(th) { background: #f0f5fc; color: #344054; }
 .markdown-body :deep(tr:nth-child(even) td) { background: #fafbfd; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
 @media (max-width: 900px) { .app-shell { padding: 22px; } .workspace { grid-template-columns: 1fr; } .page-header { align-items: start; } .status-badge { display: none; } .preview-toolbar { align-items: start; flex-direction: column; } .toolbar-actions { width: 100%; } .toolbar-actions label { flex: 1; } select { width: 100%; min-width: 0; } }

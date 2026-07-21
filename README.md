@@ -51,6 +51,8 @@ V0.4.1
 
 完整版本记录见 [CHANGELOG.md](CHANGELOG.md)。
 
+Web 上传协议、文件存储、接口返回结构及当前不足详见 [Web 文档检查系统分析](docs/WEB_SYSTEM_ANALYSIS.md)。
+
 
 ## 目录说明
 
@@ -121,6 +123,100 @@ python main.py SuperPOD KSManageV2.5
 - `input/KSManageV2.5/*.docx`：输出到 `output/KSManageV2.5`
 - `input/其他文件夹/*.docx`：输出到 `output/其他文件夹`
 - 直接放在 `input` 根目录的文档，会按文件名规则兜底分到 `SuperPOD`、`KSManageV2.5` 或 `Unclassified`
+
+## Web 页面使用说明
+
+### 1. 环境要求
+
+- Windows PowerShell
+- Python 3.10 或更高版本
+- Node.js 20.19 或更高版本（推荐使用当前 Node.js LTS，并包含 npm）
+
+可以用以下命令确认环境已经安装：
+
+```powershell
+python --version
+node --version
+npm --version
+```
+
+### 2. 首次安装依赖
+
+在项目根目录打开 PowerShell，依次运行：
+
+```powershell
+python -m pip install -r requirements.txt
+cd Frontend\frontend
+npm install
+cd ..\..
+```
+
+依赖只需要安装一次。
+
+### 3. 一键启动（推荐）
+
+在项目根目录运行：
+
+```powershell
+.\start.ps1
+```
+
+脚本会自动启动 Python API 和前端开发服务器。终端显示前端地址后，在浏览器打开：
+
+```text
+http://localhost:5173/
+```
+
+如果 PowerShell 提示禁止运行脚本，可仅为当前终端临时放开限制后再启动：
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\start.ps1
+```
+
+需要停止服务时，在运行 `start.ps1` 的终端按 `Ctrl+C`；脚本退出时会同时关闭它启动的 Python API。
+
+### 4. 手动启动
+
+需要分别查看前后端日志时，可以打开两个 PowerShell 终端。
+
+终端一：在项目根目录启动 Python API：
+
+```powershell
+python -m uvicorn web_api:app --reload
+```
+
+终端二：启动前端页面：
+
+```powershell
+cd Frontend\frontend
+npm start
+```
+
+然后使用浏览器打开 `http://localhost:5173/`。
+
+### 5. 页面操作
+
+1. 点击“选择 Word 文档”，选择一个或多个 `.docx` 文件。
+2. 点击“开始检查”。
+3. 页面会通过进度条显示当前百分比、处理阶段和正在检查的文件名。
+4. 检查完成后，可切换 Sheet 预览结果或下载检查报告。
+
+页面支持：
+
+- 实时展示上传、文档读取、规则检查和报告生成进度。
+- 按 Sheet 切换和预览 Markdown 检查结果。
+- 下载 Python 生成的多 Sheet Excel。
+- 下载当前 Sheet 的 Markdown。
+- 下载合并全部 Sheet 的 Markdown。
+
+如果页面提示“无法连接 Python 检查服务”，请确认后端终端仍在运行，并访问 `http://127.0.0.1:8000/api/health`。正常情况下会返回 `{"status":"ok"}`。
+
+### 6. Web 检查结果位置
+
+网页检查结果保存在 `output/web_jobs/<任务编号>/`，不会覆盖命令行按分组生成的原有报告。
+同一文件名或同一批文件名组合再次上传时，网页检查会沿用原任务编号，并用最新上传文件和检查结果覆盖旧任务；不同文件组合会创建新任务。
+此外，每个网页文档会按文件名独立归档到 `output/web_documents/<文档标识>/`。重新检查同名文件时只替换该文档的 Word 副本和问题数据，未上传的其他文档不会被修改；本次下载的 Excel 仍只包含本次上传的文件。
 
 ## 输出文件
 
