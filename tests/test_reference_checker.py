@@ -4,14 +4,14 @@ from checker.reference_checker import check_figure_references
 
 
 class FigureReferenceCheckerTests(unittest.TestCase):
-    def make_item(self, text, location, style=""):
+    def make_item(self, text, location, style="", xml_text=None, section_key="1 Overview"):
         return {
             "file_name": "manual.docx",
-            "heading": "1 Overview",
-            "section_key": "1 Overview",
+            "heading": section_key,
+            "section_key": section_key,
             "location": location,
             "text": text,
-            "xml_text": text,
+            "xml_text": text if xml_text is None else xml_text,
             "paragraph_style": style,
             "is_toc": False,
         }
@@ -43,6 +43,23 @@ class FigureReferenceCheckerTests(unittest.TestCase):
             self.make_item("Figure 12-3 Second Figure", "正文-段落2", "Caption"),
         ])
         self.assertEqual(2, len(issues))
+
+    def test_compact_word_caption_number_matches_hyphenated_reference(self):
+        issues = check_figure_references([
+            self.make_item(
+                "The All Devices page is shown in Figure 6-1 All Devices.",
+                "正文-段落195",
+                section_key="6.1 All Devices",
+            ),
+            self.make_item(
+                "Figure - All Devices",
+                "正文-段落196",
+                "Caption",
+                xml_text="Figure 61 All Devices",
+                section_key="6.1 All Devices",
+            ),
+        ])
+        self.assertEqual([], issues)
 
 
 if __name__ == "__main__":

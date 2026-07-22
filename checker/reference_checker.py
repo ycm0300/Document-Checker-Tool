@@ -7,8 +7,10 @@ FIGURE_REFERENCE_PATTERN = re.compile(r"\bFigure\s+(\d+(?:[-.]\d+)*)\b", re.IGNO
 SECTION_NUMBER_PATTERN = re.compile(r"^(\d+)(?:\.\d+)*\s+")
 
 
-def _figure_number_key(figure_number):
-    return tuple(re.split(r"[-.]", figure_number))
+def _figure_number_key(figure_number, item):
+    """按文档中的显示编号建立键，兼容 Word 字段省略章节分隔符的情况。"""
+    display_number = _display_figure_number(figure_number, item)
+    return tuple(re.split(r"[-.]", display_number))
 
 
 def _is_figure_caption(figure_number, item):
@@ -71,7 +73,7 @@ def _iter_figure_mentions(items):
             figure_numbers = list(_iter_text_figure_mentions(xml_text))
 
         for figure_number in figure_numbers:
-            yield _figure_number_key(figure_number), figure_number, item
+            yield _figure_number_key(figure_number, item), figure_number, item
 
 
 def check_figure_references(items):
