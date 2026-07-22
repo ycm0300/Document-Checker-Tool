@@ -233,7 +233,18 @@ function downloadOriginalExcel() {
         <button class="upload-box" type="button" @click="fileInput.click()">
           <span class="upload-icon">↑</span>
           <strong>{{ selectedFiles.length ? `已选择 ${selectedFiles.length} 个文档` : '选择 Word 文档' }}</strong>
-          <small>{{ selectedFiles.length ? selectedFiles.map(file => file.name).join('、') : '可同时选择多个 .docx 文件' }}</small>
+          <div v-if="selectedFiles.length" class="selected-file-list">
+            <div
+              v-for="file in selectedFiles"
+              :key="`${file.name}-${file.size}-${file.lastModified}`"
+              class="selected-file-row"
+              :title="file.name"
+            >
+              <span class="word-file-icon" aria-hidden="true">W</span>
+              <span class="selected-file-name">{{ file.name }}</span>
+            </div>
+          </div>
+          <small v-else>可同时选择多个 .docx 文件</small>
         </button>
 
         <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
@@ -316,17 +327,22 @@ function downloadOriginalExcel() {
 h1 { margin: 0; font-size: 30px; letter-spacing: -.03em; }
 .subtitle { margin: 8px 0 0; color: #667085; font-size: 14px; }
 .status-badge { padding: 8px 12px; border: 1px solid #cfe0ff; border-radius: 999px; background: #eef5ff; color: #2459a9; font-size: 12px; }
-.workspace { max-width: 1440px; margin: 0 auto; display: grid; grid-template-columns: 300px minmax(0,1fr); gap: 20px; align-items: start; }
+.workspace { max-width: 1440px; margin: 0 auto; display: grid; grid-template-columns: 300px minmax(0,1fr); gap: 20px; align-items: stretch; }
 .panel { box-sizing: border-box; border: 1px solid #e2e8f0; border-radius: 14px; background: #fff; box-shadow: 0 8px 24px rgba(35,55,80,.05); }
 .control-panel { padding: 20px; }
 .panel-heading { display: flex; align-items: center; gap: 11px; margin-bottom: 18px; }
 .panel-heading h2,.preview-toolbar h2 { margin: 0; font-size: 17px; }
 .panel-heading p { margin: 3px 0 0; color: #98a2b3; font-size: 12px; }
 .step { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 9px; background: #2563eb; color: white; font-weight: 700; }
-.upload-box { width: 100%; min-height: 150px; padding: 18px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; border: 1px dashed #adc6ee; border-radius: 12px; background: #f8fbff; color: #344054; cursor: pointer; }
+.upload-box { width: 100%; min-height: 150px; padding: 18px; display: flex; flex-direction: column; justify-content: center; align-items: stretch; gap: 8px; border: 1px dashed #adc6ee; border-radius: 12px; background: #f8fbff; color: #344054; cursor: pointer; }
 .upload-box:hover { border-color: #2563eb; background: #f0f6ff; }
-.upload-icon { display: grid; width: 36px; height: 36px; place-items: center; border-radius: 50%; background: #e6efff; color: #2563eb; font-size: 22px; }
+.upload-icon { align-self: center; display: grid; width: 36px; height: 36px; place-items: center; border-radius: 50%; background: #e6efff; color: #2563eb; font-size: 22px; }
+.upload-box > strong,.upload-box > small { text-align: center; }
 .upload-box small { color: #98a2b3; }
+.selected-file-list { max-height: 228px; margin-top: 4px; display: grid; gap: 6px; overflow-y: auto; scrollbar-width: thin; }
+.selected-file-row { min-width: 0; height: 32px; padding: 0 9px; display: flex; align-items: center; gap: 8px; border: 1px solid #dbe6f5; border-radius: 7px; background: #fff; text-align: left; }
+.word-file-icon { flex: none; display: grid; width: 20px; height: 22px; place-items: center; border-radius: 3px; background: #2563eb; color: #fff; font-size: 11px; font-weight: 800; }
+.selected-file-name { min-width: 0; flex: 1; overflow: hidden; color: #52637a; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .info-card { margin: 16px 0; padding: 12px 14px; display: flex; justify-content: space-between; border-radius: 9px; background: #f7f8fa; color: #667085; font-size: 13px; }
 .info-card strong { color: #172033; }
 .progress-card { margin: -4px 0 16px; }
@@ -344,21 +360,21 @@ h1 { margin: 0; font-size: 30px; letter-spacing: -.03em; }
 .excel-button:hover:not(:disabled) { background: #e4f6eb; border-color: #80bd99; }
 button:disabled { opacity: .45; cursor: not-allowed; }
 .error-message { color: #b42318; font-size: 12px; line-height: 1.5; }
-.preview-panel { min-width: 0; overflow: hidden; }
+.preview-panel { min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
 .preview-toolbar { padding: 18px 20px; display: flex; justify-content: space-between; align-items: center; gap: 20px; border-bottom: 1px solid #e8edf4; }
 .toolbar-actions { display: flex; align-items: end; gap: 10px; }
 .toolbar-actions label { display: grid; gap: 5px; color: #667085; font-size: 11px; }
 select { min-width: 250px; height: 38px; padding: 0 34px 0 11px; border: 1px solid #d5dce7; border-radius: 8px; background: #fff; color: #344054; }
-.empty-state { min-height: 510px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #98a2b3; }
+.empty-state { min-height: 510px; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #98a2b3; }
 .empty-state strong { color: #667085; }
 .empty-state p { margin: 7px 0 0; font-size: 13px; }
 .empty-icon { margin-bottom: 12px; display: grid; width: 54px; height: 54px; place-items: center; border: 1px solid #d8e1ef; border-radius: 14px; background: #f7f9fc; color: #4773b8; font-weight: 800; }
-.markdown-body { min-height: 510px; max-height: calc(100vh - 210px); padding: 24px; overflow: auto; color: #344054; font-size: 14px; line-height: 1.65; }
+.markdown-body { min-height: 510px; max-height: calc(100vh - 210px); flex: 1; padding: 24px; overflow: auto; color: #344054; font-size: 14px; line-height: 1.65; }
 .markdown-body :deep(h2) { margin: 0 0 18px; color: #172033; font-size: 22px; }
 .markdown-body :deep(table) { width: max-content; min-width: 100%; border-collapse: collapse; font-size: 13px; }
 .markdown-body :deep(th),.markdown-body :deep(td) { max-width: 440px; padding: 10px 12px; border: 1px solid #dfe5ee; text-align: left; vertical-align: top; white-space: normal; overflow-wrap: anywhere; }
 .markdown-body :deep(th) { background: #f0f5fc; color: #344054; }
 .markdown-body :deep(tr:nth-child(even) td) { background: #fafbfd; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
-@media (max-width: 900px) { .app-shell { padding: 22px; } .workspace { grid-template-columns: 1fr; } .page-header { align-items: start; } .status-badge { display: none; } .preview-toolbar { align-items: start; flex-direction: column; } .toolbar-actions { width: 100%; } .toolbar-actions label { flex: 1; } select { width: 100%; min-width: 0; } }
+@media (max-width: 900px) { .app-shell { padding: 22px; } .workspace { grid-template-columns: 1fr; align-items: start; } .panel { width: 100%; } .page-header { align-items: start; } .status-badge { display: none; } .preview-toolbar { align-items: start; flex-direction: column; } .toolbar-actions { width: 100%; } .toolbar-actions label { flex: 1; } select { width: 100%; min-width: 0; } }
 </style>
