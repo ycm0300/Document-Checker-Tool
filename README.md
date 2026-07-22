@@ -9,7 +9,7 @@
 
 ## 当前版本
 
-V0.5.0
+V1.0.0
 
 ## 功能说明
 
@@ -32,6 +32,20 @@ V0.5.0
 - 通过 Web 页面上传一个或多个 Word 文档并直接执行检查。
 - 实时展示当前文件、检查阶段和整体检查进度。
 - 在页面中预览各 Sheet，并下载 Excel 或 Markdown 结果。
+
+## V1.0.0 更新
+
+本版本重点优化前端结构、Web 并发持久化和检查准确性。
+
+主要调整：
+
+- 将文档上传、检查进度和历史任务结果请求从 `App.vue` 抽离到独立 API 模块。
+- 优化 Web 上传文件列表，逐项展示 Word 文件名并支持长列表滚动。
+- 为同名文档归档和同文件组合任务替换增加互斥保护，避免并发请求产生目录竞争。
+- 英文格式检查跳过命令和代码样式内容，并保护 URL、IP、路径、版本号等特殊文本，减少误报。
+- Figure 引用检查区分图题与正文引用，并修复 Word 自动编号 `Figure 61` 与正文 `Figure 6-1` 无法匹配的问题。
+- 新增英文格式和 Figure 引用自动化测试，覆盖主要误报与编号匹配场景。
+- 新增前端现状分析与分阶段重构说明文档。
 
 ## V0.5.0 更新
 
@@ -94,10 +108,13 @@ document-compliance-checker/
 │   ├── english_rules.py
 │   └── vendor_rules.py
 ├── docs/                   # 项目文档目录
-│   └── WEB_SYSTEM_ANALYSIS.md # Web 上传、存储和接口分析
+│   ├── WEB_SYSTEM_ANALYSIS.md # Web 上传、存储和接口分析
+│   └── FRONTEND_REFACTOR_ANALYSIS.md # 前端现状和重构方案
 ├── Frontend/
 │   └── frontend/           # Vue 3 + Vite Web 页面
-│       ├── src/App.vue     # 上传、进度条和结果预览页面
+│       ├── src/
+│       │   ├── api/documentCheckers.js # Web API 请求封装
+│       │   └── App.vue     # 上传、进度条和结果预览页面
 │       └── vite.config.js  # 开发服务器及 API 代理配置
 ├── input/                  # 输入 Word 文档目录，可按文档分组放入子目录
 ├── output/                 # 输出检查结果目录，会按文档分组生成子目录
@@ -107,6 +124,7 @@ document-compliance-checker/
 ├── report/                 # 报告导出
 │   ├── excel_writer.py
 │   └── txt_writer.py
+├── tests/                  # 英文格式和 Figure 引用自动化测试
 ├── main.py                 # 主程序入口
 ├── web_api.py              # FastAPI 上传、进度、结果和下载接口
 ├── web_service.py          # Web 文档检查及 Excel 数据转换服务
