@@ -10,6 +10,14 @@ from config.common_rules import clean_text
 
 
 LETTER_HEADING_PATTERN = re.compile(r"^([A-Z])(?:\.(\d+(?:\.\d+)*))?\.?\s+.+")
+CODE_STYLE_KEYWORDS = ("code", "command", "console", "preformatted", "代码", "命令")
+
+
+def is_code_paragraph(paragraph):
+    """根据 Word 段落样式识别代码、命令和控制台内容。"""
+    style_name = paragraph.style.name if paragraph.style else ""
+    style_name_lower = style_name.casefold()
+    return any(keyword.casefold() in style_name_lower for keyword in CODE_STYLE_KEYWORDS)
 
 
 def is_heading(paragraph):
@@ -384,6 +392,8 @@ def read_word_file(file_path):
                     "is_heading": not is_toc,
                     "is_toc": is_toc,
                     "heading_level": heading_level,
+                    "paragraph_style": block.style.name if block.style else "",
+                    "is_code_style": is_code_paragraph(block),
                 })
             else:
                 results.append({
@@ -397,6 +407,8 @@ def read_word_file(file_path):
                     "is_heading": False,
                     "is_toc": False,
                     "heading_level": None,
+                    "paragraph_style": block.style.name if block.style else "",
+                    "is_code_style": is_code_paragraph(block),
                 })
 
         elif isinstance(block, Table):

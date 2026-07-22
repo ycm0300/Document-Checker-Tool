@@ -8,7 +8,20 @@ SECTION_NUMBER_PATTERN = re.compile(r"^(\d+)(?:\.\d+)*\s+")
 
 
 def _figure_number_key(figure_number):
-    return re.sub(r"[-.]", "", figure_number)
+    return tuple(re.split(r"[-.]", figure_number))
+
+
+def _is_figure_caption(figure_number, item):
+    """优先根据 Word 样式识别题注，样式缺失时再使用文本位置判断。"""
+    style_name = str(item.get("paragraph_style", "")).casefold()
+    if "caption" in style_name or "题注" in style_name:
+        return True
+
+    text = clean_text(item.get("text", ""))
+    if re.match(r"^Figure\s*(?:[-.]?\s*)", text, re.IGNORECASE):
+        normalized_number = re.escape(figure_number).replace(r"\-", "[-.]").replace(r"\.", "[-.]")
+        return bool(re.match(rf"^Figure\s+{normalized_number}\b", text, re.IGNORECASE)) or text.startswith("Figure -")
+    return False
 
 
 def _get_section_chapter_number(item):
@@ -62,7 +75,7 @@ def _iter_figure_mentions(items):
 
 
 def check_figure_references(items):
-    """检查 Figure 编号是否至少出现两次：题注本身 + 正文引用。"""
+    """分别识别 Figure 题注和正文引用，并按确定性输出问题或提示。"""
     figure_mentions = {}
 
     for figure_key, figure_number, item in _iter_figure_mentions(items):
@@ -70,19 +83,28 @@ def check_figure_references(items):
 
     issues = []
     for _, mentions in figure_mentions.items():
-        if len(mentions) > 1:
+        captions = [mention for mention in mentions if _is_figure_caption(*mention)]
+        references = [mention for mention in mentions if not _is_figure_caption(*mention)]
+        if captions and references:
             continue
 
         figure_number, item = mentions[0]
         display_figure_number = _display_figure_number(figure_number, item)
+        if captions:
+            issue_type = "引用提示"
+            issue = f"Figure {display_figure_number} 存在图题，但未检测到正文中的显式编号引用"
+        else:
+            issue_type = "引用问题"
+            issue = f"正文引用了 Figure {display_figure_number}，但未检测到对应图题"
+
         issues.append({
             "file_name": item["file_name"],
-            "issue_type": "引用问题",
+            "issue_type": issue_type,
             "heading": item["heading"],
             "section_key": item.get("section_key", item["heading"]),
             "location": item["location"],
             "content": item["text"],
-            "issue": f"Figure {display_figure_number} 仅出现一次，可能未被正文引用",
+            "issue": issue,
         })
 
     return issues
