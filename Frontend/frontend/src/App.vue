@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import MarkdownIt from 'markdown-it'
+import { checkDocuments } from './api/documentCheckers'
 
 const markdown = new MarkdownIt({ html: false, linkify: true, typographer: true })
 const fileInput = ref(null)
@@ -96,15 +97,10 @@ async function startCheck() {
     }
   }, 300)
   try {
-    const formData = new FormData()
-    selectedFiles.value.forEach((file) => formData.append('files', file))
-    const response = await fetch('/api/check', {
-      method: 'POST',
-      headers: { 'X-Progress-ID': progressId },
-      body: formData,
-    })
-    const data = await response.json()
-    if (!response.ok) throw new Error(data.detail || '检查请求失败')
+    const data=await checkDocuments(
+      selectedFiles.value,
+      progressId,
+    )
 
     applyJobResult(data)
     currentSelectionChecked.value = true
