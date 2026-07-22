@@ -2,6 +2,8 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import MarkdownIt from 'markdown-it'
 import { checkDocuments } from './api/documentCheckers'
+import { getCheckResult } from './api/documentCheckers'
+import { getJobResult } from './api/documentCheckers'
 
 const markdown = new MarkdownIt({ html: false, linkify: true, typographer: true })
 const fileInput = ref(null)
@@ -87,9 +89,7 @@ async function startCheck() {
   const progressId = crypto.randomUUID().replaceAll('-', '')
   const progressTimer = window.setInterval(async () => {
     try {
-      const response = await fetch(`/api/check-progress/${progressId}`)
-      if (!response.ok) return
-      const progress = await response.json()
+      const progress = await getCheckResult(progressId)
       checkProgress.value = progress.percent
       progressMessage.value = progress.message
     } catch {
@@ -97,7 +97,7 @@ async function startCheck() {
     }
   }, 300)
   try {
-    const data=await checkDocuments(
+    const data = await checkDocuments(
       selectedFiles.value,
       progressId,
     )
@@ -127,10 +127,11 @@ async function restoreLastResult() {
   isLoading.value = true
   errorMessage.value = ''
   try {
-    const response = await fetch(`/api/jobs/${jobId}`)
-    const data = await response.json()
-    if (!response.ok) throw Object.assign(new Error(data.detail || '无法恢复上次检查结果'), { status: response.status })
-    applyJobResult(data, localStorage.getItem(LAST_SHEET_KEY) || '')
+    const data = await getJobResult(jobId)
+    applyJobResult(
+      data,
+      localStorage.getItem(LAST_SHEET_KEY) || '',
+)
   } catch (error) {
     if (error.status === 404) {
       localStorage.removeItem(LAST_JOB_KEY)
