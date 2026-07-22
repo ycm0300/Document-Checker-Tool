@@ -3,6 +3,7 @@ import hashlib
 import json
 import re
 import shutil
+import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,6 +21,7 @@ WEB_DOCUMENTS_DIR = OUTPUT_DIR / "web_documents"
 MAX_FILE_SIZE = 50 * 1024 * 1024
 JOB_ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
 CHECK_PROGRESS = {}
+PERSISTENCE_LOCK = threading.Lock()
 
 app = FastAPI(title="Document Compliance Checker API", version="1.0.0")
 app.add_middleware(
@@ -216,24 +218,28 @@ async def check_documents(
         update_check_progress(progress_id, 90, "正在整理检查结果")
         sheet_data = workbook_to_sheets(excel_file)
 
-        for saved_file in saved_files:
-            replace_document_record(saved_file, all_file_issues[saved_file.name])
-        metadata = {
-            "jobId": job_id,
-            "fileSignature": file_signature,
-            "documentNames": [Path(file.filename or "document.docx").name for file in files],
-            "updatedAt": datetime.now(timezone.utc).isoformat(),
-        }
-        (job_dir / "metadata.json").write_text(
-            json.dumps(metadata, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        # 多个检查请求可能同时更新同名文档或同一文件组合。
+        # Windows 不允许将目录重命名到已被另一请求创建的目标目录，
+        # 因此将归档和任务替换作为一个互斥的持久化阶段。
+        with PERSISTENCE_LOCK:
+            for saved_file in saved_files:
+                replace_document_record(saved_file, all_file_issues[saved_file.name])
+            metadata = {
+                "jobId": job_id,
+                "fileSignature": file_signature,
+                "documentNames": [Path(file.filename or "document.docx").name for file in files],
+                "updatedAt": datetime.now(timezone.utc).isoformat(),
+            }
+            (job_dir / "metadata.json").write_text(
+                json.dumps(metadata, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
 
-        if existing_job_id:
-            job_dir = replace_existing_job(job_dir, existing_job_id)
-            excel_file = job_dir / excel_file.name
-            for duplicate_job in existing_jobs[1:]:
-                shutil.rmtree(duplicate_job, ignore_errors=True)
+            if existing_job_id:
+                job_dir = replace_existing_job(job_dir, existing_job_id)
+                excel_file = job_dir / excel_file.name
+                for duplicate_job in existing_jobs[1:]:
+                    shutil.rmtree(duplicate_job, ignore_errors=True)
 
         update_check_progress(progress_id, 100, "检查完成")
         return {
