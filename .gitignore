@@ -13,3 +13,6 @@ __pycache__/
 # IDE配置
 .vscode/
 .idea/
+
+# Skills
+.agents/
